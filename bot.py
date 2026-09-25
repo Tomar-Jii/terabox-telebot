@@ -1,5 +1,6 @@
 import os
 import telebot
+from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 import requests
 from dotenv import load_dotenv
 from flask import Flask
@@ -8,24 +9,67 @@ import threading
 load_dotenv()
 bot = telebot.TeleBot(os.getenv('TELEGRAM_TOKEN'))
 
-# Multiple tokens ko comma se split karke ek list bana lenge
 tokens_str = os.getenv('APIFY_TOKENS', '')
 APIFY_TOKENS = [t.strip() for t in tokens_str.split(',') if t.strip()]
+
+# Force join settings (Render me set karne ke baad yahin se fetch hogi)
+CHANNEL_ID = os.getenv('CHANNEL_ID') 
+CHANNEL_LINK = "https://t.me/+p5Yu1iglyfUxZThh"
 
 app = Flask(__name__)
 @app.route('/')
 def home():
-    return "Bot 24/7 Zinda Hai with Multiple Tokens!"
+    return "Bot 24/7 Zinda Hai with Force Join (Private Chat Only)!"
 
 def run_server():
     app.run(host="0.0.0.0", port=int(os.environ.get('PORT', 8080)))
 
-@bot.message_handler(commands=['start'])
+# Check karega ki user channel me hai ya nahi
+def is_subscribed(chat_id, user_id):
+    if not chat_id:
+        return True
+    try:
+        member = bot.get_chat_member(chat_id, user_id)
+        if member.status in ['member', 'creator', 'administrator', 'restricted']:
+            return True
+        return False
+    except telebot.apihelper.ApiTelegramException as e:
+        print(f"Error: Bot channel me admin nahi hai ya Channel ID galat hai. {e}")
+        return False
+    except Exception as e:
+        return True
+
+# Force join message
+def ask_to_join(message):
+    markup = InlineKeyboardMarkup()
+    markup.add(InlineKeyboardButton("Join Channel 🚀", url=CHANNEL_LINK))
+    markup.add(InlineKeyboardButton("Joined ✅ (Check)", callback_data="check_join"))
+    bot.reply_to(message, "⚠️ **Pehle Hamara Channel Join Karo!**\n\nBot use karne ke liye aapko hamara channel join karna hoga. Join karne ke baad 'Joined' button par click karein.", parse_mode="Markdown", reply_markup=markup)
+
+@bot.callback_query_handler(func=lambda call: call.data == "check_join")
+def check_join_callback(call):
+    if is_subscribed(CHANNEL_ID, call.from_user.id):
+        bot.answer_callback_query(call.id, "✅ Verification Successful! Ab aap link bhej sakte hain.", show_alert=True)
+        bot.delete_message(call.message.chat.id, call.message.message_id)
+    else:
+        bot.answer_callback_query(call.id, "❌ Aapne abhi tak join nahi kiya hai!", show_alert=True)
+
+# ===== IMPORTANT UPDATE: PRIVATE CHAT CHECK =====
+# Sirf unhi messages pe react karega jahan chat ka type 'private' ho
+
+@bot.message_handler(commands=['start'], func=lambda message: message.chat.type == 'private')
 def send_welcome(message):
+    if CHANNEL_ID and not is_subscribed(CHANNEL_ID, message.from_user.id):
+        ask_to_join(message)
+        return
     bot.reply_to(message, "Mujhe koi bhi Terabox link bhejo, main uski direct video download link de dunga. 🚀")
 
-@bot.message_handler(func=lambda message: True)
+@bot.message_handler(func=lambda message: message.chat.type == 'private')
 def handle_message(message):
+    if CHANNEL_ID and not is_subscribed(CHANNEL_ID, message.from_user.id):
+        ask_to_join(message)
+        return
+
     url = message.text
     if "terabox" not in url.lower():
         bot.reply_to(message, "Bhai, ye Terabox ka link nahi lag raha. Sahi link bhejo.")
@@ -39,7 +83,6 @@ def handle_message(message):
     payload = {"url": url}
     success = False
 
-    # Ek-ek karke sabhi tokens try karenge
     for token in APIFY_TOKENS:
         try:
             api_url = f"https://api.apify.com/v2/acts/igview-owner~terabox-fast-video-downloader/run-sync-get-dataset-items?token={token}"
@@ -58,15 +101,10 @@ def handle_message(message):
                     bot.edit_message_text(chat_id=message.chat.id, message_id=msg.message_id, text="❌ Video private ho sakti hai ya exist nahi karti.")
                 
                 success = True
-                break  # Kaam ho gaya, aage ke token check karne ki zaroorat nahi
-            
+                break 
             else:
-                # Agar limit khatam hui, to loop chalega aur automatically agla token use hoga
-                print(f"Token failed with status {response.status_code}, trying next...")
                 continue
-                
         except Exception as e:
-            print(f"Error: {e}, trying next token...")
             continue 
             
     if not success:
