@@ -2,7 +2,6 @@ import os
 import telebot
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 import requests
-import json
 from dotenv import load_dotenv
 from flask import Flask
 import threading
@@ -41,7 +40,7 @@ def ask_to_join(message):
     markup = InlineKeyboardMarkup()
     markup.add(InlineKeyboardButton("Join Channel 🚀", url=CHANNEL_LINK))
     markup.add(InlineKeyboardButton("Joined ✅ (Check)", callback_data="check_join"))
-    bot.reply_to(message, "⚠️ **Pehle Hamara Channel Join Karo!**\n\nBot use karne ke liye aapko hamara channel join karna hoga. Join karne ke baad 'Joined' button par click karein.", parse_mode="Markdown", reply_markup=markup)
+    bot.reply_to(message, "⚠️ **Pehle Hamara Channel Join Karo!**\n\nBot use karne ke liye aapko hamara channel join karna hoga.", reply_markup=markup)
 
 @bot.callback_query_handler(func=lambda call: call.data == "check_join")
 def check_join_callback(call):
@@ -56,7 +55,7 @@ def send_welcome(message):
     if CHANNEL_ID and not is_subscribed(CHANNEL_ID, message.from_user.id):
         ask_to_join(message)
         return
-    bot.reply_to(message, "Mujhe koi bhi Terabox link bhejo, main uski direct video download link de dunga. 🚀")
+    bot.reply_to(message, "Mujhe koi bhi Terabox video ka link bhejo, main uski direct download link de dunga. 🚀\n*(Note: Folder/Filelist link kaam nahi karega, direct video link bhejein)*")
 
 @bot.message_handler(func=lambda message: message.chat.type == 'private')
 def handle_message(message):
@@ -87,17 +86,23 @@ def handle_message(message):
                 data = response.json()
                 if isinstance(data, list) and len(data) > 0:
                     res = data[0]
-                    # Naye keys bhi check kar rahe hain
+                    
+                    # Naya Code: Agar API properly fail ho jaye
+                    if res.get('success') is False:
+                        err_msg = res.get('error', 'File nahi mili.')
+                        bot.edit_message_text(chat_id=message.chat.id, message_id=msg.message_id, 
+                                              text=f"❌ **API Error:** {err_msg}\n\n⚠️ **Tip:** Aapne shayad Folder/Filelist ka link bheja hai. Kripya us folder ko open karke kisi ek video ka direct link bhejein.", parse_mode="Markdown")
+                        success = True # Error handle ho gaya, loop tod do
+                        break
+
                     video = res.get('downloadLink') or res.get('url') or res.get('video_url') or res.get('link') or res.get('direct_link')
                     
                     if video:
                         bot.edit_message_text(chat_id=message.chat.id, message_id=msg.message_id, text=f"✅ Video mil gaya!\n\nDirect Download Link:\n{video}")
                     else:
-                        # API ka actual data print karega debug ke liye
-                        debug_info = json.dumps(res, indent=2)
-                        bot.edit_message_text(chat_id=message.chat.id, message_id=msg.message_id, text=f"❌ Download link nahi mila. API ne ye data diya hai (Isko copy karke mujhe bhejo):\n\n`{debug_info}`", parse_mode="Markdown")
+                        bot.edit_message_text(chat_id=message.chat.id, message_id=msg.message_id, text="❌ Download link nahi mila. File private ho sakti hai.")
                 else:
-                    bot.edit_message_text(chat_id=message.chat.id, message_id=msg.message_id, text="❌ Video private ho sakti hai ya dataset khali aaya.")
+                    bot.edit_message_text(chat_id=message.chat.id, message_id=msg.message_id, text="❌ Video exist nahi karti ya dataset khali aaya.")
                 
                 success = True
                 break 
