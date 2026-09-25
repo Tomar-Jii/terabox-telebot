@@ -2,6 +2,7 @@ import os
 import telebot
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 import requests
+import json
 from dotenv import load_dotenv
 from flask import Flask
 import threading
@@ -18,7 +19,7 @@ CHANNEL_LINK = "https://t.me/+p5Yu1iglyfUxZThh"
 app = Flask(__name__)
 @app.route('/')
 def home():
-    return "Bot 24/7 Zinda Hai with Force Join and Domain Fix!"
+    return "Bot 24/7 Zinda Hai!"
 
 def run_server():
     app.run(host="0.0.0.0", port=int(os.environ.get('PORT', 8080)))
@@ -64,8 +65,6 @@ def handle_message(message):
         return
 
     url = message.text.lower()
-    
-    # ===== YAHAN DOMAIN FIX KIYA HAI =====
     valid_domains = ["terabox", "1024tera", "terafileshare", "freeterabox", "teraboxapp", "4funbox"]
     if not any(domain in url for domain in valid_domains):
         bot.reply_to(message, "Bhai, ye Terabox ka link nahi lag raha. Sahi link bhejo.")
@@ -88,13 +87,17 @@ def handle_message(message):
                 data = response.json()
                 if isinstance(data, list) and len(data) > 0:
                     res = data[0]
-                    video = res.get('downloadLink') or res.get('url') or res.get('video_url')
+                    # Naye keys bhi check kar rahe hain
+                    video = res.get('downloadLink') or res.get('url') or res.get('video_url') or res.get('link') or res.get('direct_link')
+                    
                     if video:
                         bot.edit_message_text(chat_id=message.chat.id, message_id=msg.message_id, text=f"✅ Video mil gaya!\n\nDirect Download Link:\n{video}")
                     else:
-                        bot.edit_message_text(chat_id=message.chat.id, message_id=msg.message_id, text="❌ Download link nahi nikal paya.")
+                        # API ka actual data print karega debug ke liye
+                        debug_info = json.dumps(res, indent=2)
+                        bot.edit_message_text(chat_id=message.chat.id, message_id=msg.message_id, text=f"❌ Download link nahi mila. API ne ye data diya hai (Isko copy karke mujhe bhejo):\n\n`{debug_info}`", parse_mode="Markdown")
                 else:
-                    bot.edit_message_text(chat_id=message.chat.id, message_id=msg.message_id, text="❌ Video private ho sakti hai ya exist nahi karti.")
+                    bot.edit_message_text(chat_id=message.chat.id, message_id=msg.message_id, text="❌ Video private ho sakti hai ya dataset khali aaya.")
                 
                 success = True
                 break 
