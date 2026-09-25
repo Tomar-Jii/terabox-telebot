@@ -12,19 +12,17 @@ bot = telebot.TeleBot(os.getenv('TELEGRAM_TOKEN'))
 tokens_str = os.getenv('APIFY_TOKENS', '')
 APIFY_TOKENS = [t.strip() for t in tokens_str.split(',') if t.strip()]
 
-# Force join settings (Render me set karne ke baad yahin se fetch hogi)
 CHANNEL_ID = os.getenv('CHANNEL_ID') 
 CHANNEL_LINK = "https://t.me/+p5Yu1iglyfUxZThh"
 
 app = Flask(__name__)
 @app.route('/')
 def home():
-    return "Bot 24/7 Zinda Hai with Force Join (Private Chat Only)!"
+    return "Bot 24/7 Zinda Hai with Force Join and Domain Fix!"
 
 def run_server():
     app.run(host="0.0.0.0", port=int(os.environ.get('PORT', 8080)))
 
-# Check karega ki user channel me hai ya nahi
 def is_subscribed(chat_id, user_id):
     if not chat_id:
         return True
@@ -33,13 +31,11 @@ def is_subscribed(chat_id, user_id):
         if member.status in ['member', 'creator', 'administrator', 'restricted']:
             return True
         return False
-    except telebot.apihelper.ApiTelegramException as e:
-        print(f"Error: Bot channel me admin nahi hai ya Channel ID galat hai. {e}")
+    except telebot.apihelper.ApiTelegramException:
         return False
-    except Exception as e:
+    except Exception:
         return True
 
-# Force join message
 def ask_to_join(message):
     markup = InlineKeyboardMarkup()
     markup.add(InlineKeyboardButton("Join Channel 🚀", url=CHANNEL_LINK))
@@ -54,9 +50,6 @@ def check_join_callback(call):
     else:
         bot.answer_callback_query(call.id, "❌ Aapne abhi tak join nahi kiya hai!", show_alert=True)
 
-# ===== IMPORTANT UPDATE: PRIVATE CHAT CHECK =====
-# Sirf unhi messages pe react karega jahan chat ka type 'private' ho
-
 @bot.message_handler(commands=['start'], func=lambda message: message.chat.type == 'private')
 def send_welcome(message):
     if CHANNEL_ID and not is_subscribed(CHANNEL_ID, message.from_user.id):
@@ -70,8 +63,11 @@ def handle_message(message):
         ask_to_join(message)
         return
 
-    url = message.text
-    if "terabox" not in url.lower():
+    url = message.text.lower()
+    
+    # ===== YAHAN DOMAIN FIX KIYA HAI =====
+    valid_domains = ["terabox", "1024tera", "terafileshare", "freeterabox", "teraboxapp", "4funbox"]
+    if not any(domain in url for domain in valid_domains):
         bot.reply_to(message, "Bhai, ye Terabox ka link nahi lag raha. Sahi link bhejo.")
         return
 
@@ -80,7 +76,7 @@ def handle_message(message):
         return
 
     msg = bot.reply_to(message, "⏳ Video nikal raha hoon, thoda wait karo...")
-    payload = {"url": url}
+    payload = {"url": message.text}
     success = False
 
     for token in APIFY_TOKENS:
